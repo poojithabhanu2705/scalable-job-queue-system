@@ -5,24 +5,17 @@ import Job from "../models/Job.js";
 const router = express.Router();
 
 router.post("/add-job", async (req, res) => {
-
-  const { type, data, priority } = req.body;
+  const { type, data, priority = 1, delay = 0, attempts = 3 } = req.body;
 
   const job = await jobQueue.add(type, data, {
-
-    delay: 2000,
-
-    attempts: 3,
-
+    delay: parseInt(delay),
+    attempts: parseInt(attempts),
     backoff: {
       type: "fixed",
       delay: 2000,
     },
-
-    priority,
-
+    priority: parseInt(priority),
     removeOnComplete: true,
-
     removeOnFail: false,
   });
 
@@ -30,6 +23,9 @@ router.post("/add-job", async (req, res) => {
     jobId: job.id,
     type,
     status: "waiting",
+    priority: parseInt(priority),
+    attempts: parseInt(attempts),
+    delay: parseInt(delay),
   });
 
   res.json({ jobId: job.id });

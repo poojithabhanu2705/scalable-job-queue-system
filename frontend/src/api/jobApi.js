@@ -1,0 +1,64 @@
+import axios from 'axios';
+import { toast } from 'react-hot-toast';
+
+// Create a centralized axios instance
+// Using /jobs to leverage the Vite proxy (config in vite.config.js)
+const api = axios.create({
+  baseURL: '/jobs',
+  timeout: 10000, // 10s timeout
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request Interceptor (for debugging/development)
+api.interceptors.request.use(
+  (config) => {
+    if (import.meta.env.DEV) {
+      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response Interceptor for centralized error handling
+api.interceptors.response.use(
+  (response) => {
+    if (import.meta.env.DEV) {
+      console.log(`[API Response] ${response.status}`, response.data);
+    }
+    return response;
+  },
+  (error) => {
+    let message = 'An unexpected error occurred';
+    
+    if (error.response) {
+      // Backend returned an error response (4xx, 5xx)
+      const { status, data } = error.response;
+      message = data?.message || data?.error || `Server Error: ${status}`;
+      console.error(`[API Error Response] ${status}`, data);
+    } else if (error.request) {
+      // Request was made but no response received (Network Error)
+      message = 'Network error: Backend server unreachable';
+      console.error('[API Network Error]', error.request);
+    } else {
+      // Something happened in setting up the request
+      message = error.message;
+      console.error('[API Setup Error]', error.message);
+    }
+
+    return Promise.reject({ ...error, message });
+  }
+);
+
+export const jobApi = {
+  addJob: (data) => api.post('/add-job', data),
+  getAllJobs: () => api.get('/all'),
+  getJobStatus: (status) => api.get(`/status/${status}`),
+  getJobById: (id) => api.get(`/${id}`),
+};
+
+export default api;
