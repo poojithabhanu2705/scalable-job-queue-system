@@ -55,10 +55,11 @@ api.interceptors.response.use(
 );
 
 export const jobApi = {
-  addJob: (data) => api.post('/add-job', data),
-  getAllJobs: () => api.get('/all'),
-  getJobStatus: (status) => api.get(`/status/${status}`),
-  getJobById: (id) => api.get(`/${id}`),
+  addCampaign: (data) => api.post('/add-campaign', data),
+  getStats: () => api.get('/stats'),
+  getDeliveryLogs: () => api.get('/all'),
+  retryJob: (id) => api.post(`/retry/${id}`),
+  deleteJob: (id) => api.delete(`/${id}`),
 };
 
 export default api;

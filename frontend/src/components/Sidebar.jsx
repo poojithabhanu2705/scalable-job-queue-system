@@ -11,9 +11,9 @@ import {
 
 export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) {
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'jobs', label: 'All Jobs', icon: Layers },
-    { id: 'failed', label: 'Failed Jobs', icon: AlertCircle },
+    { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+    { id: 'jobs', label: 'Delivery Logs', icon: Layers },
+    { id: 'failed', label: 'Failed Deliveries', icon: AlertCircle },
   ];
 
   return (
@@ -33,10 +33,10 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) 
       `}>
         <div className="p-8 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 bg-zinc-100 text-zinc-950 rounded flex items-center justify-center shadow-lg">
-              <Activity size={16} />
+            <div className="w-7 h-7 bg-blue-500 text-white rounded flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <Zap size={16} fill="white" />
             </div>
-            <span className="font-bold text-zinc-100 tracking-tight">JobFlow</span>
+            <span className="font-bold text-zinc-100 tracking-tight">MailPulse</span>
           </div>
           <button 
             onClick={() => setIsOpen(false)}

@@ -1,59 +1,72 @@
 import express from "express";
 import { jobQueue } from "../queue/queue.js";
 import Job from "../models/Job.js";
+import Campaign from "../models/Campaign.js";
+import { campaignService } from "../services/campaignService.js";
 
 const router = express.Router();
 
-router.post("/add-job", async (req, res) => {
-  const { type, data, priority = 1, delay = 0, attempts = 3 } = req.body;
-
-  const job = await jobQueue.add(type, data, {
-    delay: parseInt(delay),
-    attempts: parseInt(attempts),
-    backoff: {
-      type: "fixed",
-      delay: 2000,
-    },
-    priority: parseInt(priority),
-    removeOnComplete: true,
-    removeOnFail: false,
-  });
-
-  await Job.create({
-    jobId: job.id,
-    type,
-    status: "waiting",
-    priority: parseInt(priority),
-    attempts: parseInt(attempts),
-    delay: parseInt(delay),
-  });
-
-  res.json({ jobId: job.id });
+// 1. Create a new campaign
+router.post("/add-campaign", async (req, res) => {
+  try {
+    const campaign = await campaignService.createCampaign(req.body);
+    res.json(campaign);
+  } catch (error) {
+    console.error("Campaign creation error:", error);
+    res.status(500).json({ error: "Failed to create campaign" });
+  }
 });
 
+// 2. Get delivery stats
+router.get("/stats", async (req, res) => {
+  try {
+    const stats = await campaignService.getStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch stats" });
+  }
+});
+
+// 3. Get all delivery logs (paginated or limit for demo)
 router.get("/all", async (req, res) => {
-
-  const jobs = await Job.find();
-
-  res.json(jobs);
+  try {
+    const jobs = await Job.find().sort({ createdAt: -1 }).limit(100);
+    res.json(jobs);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch logs" });
+  }
 });
 
-router.get("/status/:status", async (req, res) => {
-
-  const jobs = await Job.find({
-    status: req.params.status,
-  });
-
-  res.json(jobs);
+// 4. Retry a failed job
+router.post("/retry/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const job = await jobQueue.getJob(id);
+    if (job) {
+      await job.retry();
+      await Job.findOneAndUpdate({ jobId: id }, { status: "retrying" });
+      res.json({ message: "Job scheduled for retry" });
+    } else {
+      res.status(404).json({ error: "Job not found in queue" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Failed to retry job" });
+  }
 });
 
-router.get("/:id", async (req, res) => {
-
-  const job = await Job.findOne({
-    jobId: req.params.id,
-  });
-
-  res.json(job);
+// 5. Delete a job/log entry
+router.delete("/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const job = await jobQueue.getJob(id);
+    if (job) {
+      await job.remove();
+    }
+    await Job.findOneAndDelete({ jobId: id });
+    res.json({ message: "Entry deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete entry" });
+  }
 });
 
 export default router;

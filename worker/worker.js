@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 import IORedis from "ioredis";
 import Job from "../models/Job.js";
+import Campaign from "../models/Campaign.js";
 import connectDB from "../config/db.js";
 import dotenv from "dotenv";
 
@@ -12,64 +13,84 @@ const connection = new IORedis({
   maxRetriesPerRequest: null,
 });
 
-console.log("Worker started");
-await new Promise((res) => setTimeout(res, 1000));
-
-const workerId = Math.floor(Math.random() * 1000);
-
 const worker = new Worker(
   "jobQueue",
-
   async (job) => {
-
-    console.log("Job received:", job.name);
+    const { campaignId, recipientEmail } = job.data;
     
-    await new Promise((res) => setTimeout(res, 2000));
+    console.log(`Processing email for ${recipientEmail} (Campaign: ${campaignId})`);
 
-    try {
+    // Update status to active
+    await Job.findOneAndUpdate(
+      { jobId: job.id },
+      { status: "active", processedAt: new Date() }
+    );
 
-      await Job.findOneAndUpdate(
-        { jobId: job.id },
-        { status: "active" }
-      );
+    // Simulate realistic processing delay (1-3 seconds)
+    const delay = Math.floor(Math.random() * 2000) + 1000;
+    await new Promise((res) => setTimeout(res, delay));
 
-      console.log("Processing job:", job.name);
-
-      if (job.name === "payment") {
-        throw new Error("Payment failed");
-      }
-
-      await Job.findOneAndUpdate(
-        { jobId: job.id },
-        { status: "completed" }
-      );
-
-      console.log("Completed job:", job.name);
-
-    } catch (error) {
-
-      console.log("Inside catch block");
-
-      await Job.findOneAndUpdate(
-        { jobId: job.id },
-        { status: "failed" }
-      );
-
-      console.log(error.message);
-
-      throw error;
+    // Simulate random failure (15% chance for demo)
+    const isFailed = Math.random() < 0.15;
+    
+    if (isFailed) {
+      const errorReasons = [
+        "SMTP Timeout",
+        "Invalid Recipient Address",
+        "Rate Limit Exceeded",
+        "Mail Server Rejected",
+        "DNS Resolution Failed"
+      ];
+      const reason = errorReasons[Math.floor(Math.random() * errorReasons.length)];
+      throw new Error(reason);
     }
 
-  },
+    // Success logic
+    await Job.findOneAndUpdate(
+      { jobId: job.id },
+      { status: "delivered", processedAt: new Date() }
+    );
 
+    // Update Campaign counts
+    await Campaign.findByIdAndUpdate(campaignId, {
+      $inc: { sentCount: 1 }
+    });
+
+    console.log(`✓ Delivered: ${recipientEmail}`);
+  },
   { connection }
 );
 
 worker.on("completed", (job) => {
-  console.log(`Job ${job.id} completed successfully`);
+  console.log(`Job ${job.id} completed`);
 });
 
-worker.on("failed", (job, err) => {
-  console.log(`Job ${job.id} failed with error: ${err.message}`);
+worker.on("failed", async (job, err) => {
+  console.log(`✗ Failed: ${job.id} - ${err.message}`);
+  
+  const { campaignId } = job.data;
+  const isFinalFailure = job.attemptsMade >= job.opts.attempts;
+
+  await Job.findOneAndUpdate(
+    { jobId: job.id },
+    { 
+      status: isFinalFailure ? "failed" : "retrying",
+      failureReason: err.message,
+      retryCount: job.attemptsMade
+    }
+  );
+
+  if (isFinalFailure) {
+    await Campaign.findByIdAndUpdate(campaignId, {
+      $inc: { failedCount: 1 }
+    });
+  }
+});
+
+// Update Campaign to completed if all jobs are done
+worker.on("drained", async () => {
+   // This is a bit complex to do per-campaign in a generic way here, 
+   // but for the demo we can just check all jobs for a campaign when one completes.
+   // Simplified: Campaigns remain in 'processing' status in this demo for UX.
 });
 
